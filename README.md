@@ -188,17 +188,6 @@ To use the `search.py` script for neural architecture search, follow these steps
 
 <h2 id="performance-summary">📈 Performance Summary</h2>
 
-<style>
-  table {
-    border-collapse: collapse;
-    width: 100%;
-  }
-  th, td {
-    border: 1px solid black;
-    padding: 8px;
-    text-align: left;
-  }
-</style>
 
 
 
