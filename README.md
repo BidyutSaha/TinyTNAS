@@ -201,18 +201,6 @@ To use the `search.py` script for neural architecture search, follow these steps
 </style>
 
 
-<style>
-  table {
-    border-collapse: collapse;
-    width: 100%;
-  }
-  th, td {
-    border: 1px solid black;
-    padding: 8px;
-     text-align: center;
-    vertical-align: middle;
-  }
-</style>
 
 
 
