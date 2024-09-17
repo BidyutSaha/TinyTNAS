@@ -124,7 +124,7 @@ callbacks_list = [checkpoint, early, redonplat]  # early
 
 best_model,_,_,_ = BuildModelwithSpecs(k=best_k,c=best_c,num_class = num_class , ds = train_ds ,  input_shape = input_shape,learning_rate = learning_rate , lossf=lossf)
 print(best_model)
-max_val_Acc = ModelTraning(best_model[0],train_ds,val_ds , epochs = 500, )
+max_val_Acc = ModelTraning(best_model,train_ds,val_ds , epochs = 500, )
 print(max_val_Acc)
 
 
