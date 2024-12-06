@@ -49,8 +49,8 @@ val_ds = (X_test,Y_test)
 
 num_class = 5
 # Set `lossf` based on the format of your target labels:
-# - If your target labels are one-hot encoded, use `lossf = 0` for categorical crossentropy.
-# - If your target labels are integers (i.e., class indices), use `lossf = 1` for sparse categorical crossentropy.
+# - If your target labels are one-hot encoded, use `lossf = 1` for categorical crossentropy.
+# - If your target labels are integers (i.e., class indices), use `lossf = 0` for sparse categorical crossentropy.
 lossf = 0
 
 
