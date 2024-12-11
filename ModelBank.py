@@ -7,6 +7,20 @@ import re
 import numpy as np
 import mltk
 
+import tensorflow as tf
+import tensorflow_addons as tfa
+from sklearn.utils.class_weight import compute_class_weight
+import tensorflow as tf
+import tensorflow_addons as tfa
+from tensorflow.keras.metrics import Precision, Recall
+from tensorflow.keras import backend as K
+
+from tensorflow.keras.backend import clear_session
+import gc
+
+
+
+
 
 PROFILE_ERROR_FLAG = 0
 
@@ -101,6 +115,61 @@ def evaluate_hardware_requirements(model, ds):
 
 
 
+class MacroF1Score(tf.keras.metrics.Metric):
+    def __init__(self, num_classes, name='macro_f1_score', **kwargs):
+        super(MacroF1Score, self).__init__(name=name, **kwargs)
+        self.num_classes = num_classes
+        self.true_positives = self.add_weight(
+            name='true_positives', shape=(num_classes,), initializer='zeros'
+        )
+        self.false_positives = self.add_weight(
+            name='false_positives', shape=(num_classes,), initializer='zeros'
+        )
+        self.false_negatives = self.add_weight(
+            name='false_negatives', shape=(num_classes,), initializer='zeros'
+        )
+
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        # One-hot encode y_true if it's not already
+        if y_true.shape[-1] != self.num_classes:
+            y_true = tf.one_hot(tf.cast(y_true, tf.int32), depth=self.num_classes)
+
+        # Convert predictions to binary using argmax
+        y_pred = tf.one_hot(tf.argmax(y_pred, axis=-1), depth=self.num_classes)
+
+        # Compute true positives, false positives, false negatives
+        tp = tf.reduce_sum(y_true * y_pred, axis=0)
+        fp = tf.reduce_sum((1 - y_true) * y_pred, axis=0)
+        fn = tf.reduce_sum(y_true * (1 - y_pred), axis=0)
+
+        # Update state variables
+        self.true_positives.assign_add(tp)
+        self.false_positives.assign_add(fp)
+        self.false_negatives.assign_add(fn)
+
+    def result(self):
+        # Compute precision and recall
+        precision = self.true_positives / (
+            self.true_positives + self.false_positives + tf.keras.backend.epsilon()
+        )
+        recall = self.true_positives / (
+            self.true_positives + self.false_negatives + tf.keras.backend.epsilon()
+        )
+
+        # Compute F1 per class
+        f1_per_class = 2 * (precision * recall) / (precision + recall + tf.keras.backend.epsilon())
+
+        # Return macro F1-score
+        return tf.reduce_mean(f1_per_class)
+
+    def reset_states(self):
+        self.true_positives.assign(tf.zeros_like(self.true_positives))
+        self.false_positives.assign(tf.zeros_like(self.false_positives))
+        self.false_negatives.assign(tf.zeros_like(self.false_negatives))
+
+
+
+
 
 
 def BuildModelwithSpecs(k,c,num_class = 2 , ds = None ,  input_shape = (1,60,6),learning_rate = 0.0001 , lossf=1):
@@ -123,6 +192,8 @@ def BuildModelwithSpecs(k,c,num_class = 2 , ds = None ,  input_shape = (1,60,6),
     multiplier = 1.5
 
     # first convolutional layer
+    #x = tf.keras.layers.Conv1D(n, kernel_size, activation='relu', padding='same')(inputs)
+
     x = tf.keras.layers.SeparableConv1D(n, kernel_size, activation='relu', padding='same')(inputs)
 
    
@@ -153,9 +224,20 @@ def BuildModelwithSpecs(k,c,num_class = 2 , ds = None ,  input_shape = (1,60,6),
     if lossf == 1 : # category
         loss = 'categorical_crossentropy'
 
+    
+
+
+  
+
     model.compile(optimizer=opt,
             loss=loss ,
-            metrics=['accuracy'])
+            metrics=['accuracy', tf.keras.metrics.Precision(),
+                              tf.keras.metrics.Recall(),
+                              tfa.metrics.F1Score(num_classes=num_class,
+                                                  average='macro',
+                                                  threshold=0.5),
+                              MacroF1Score(num_classes=num_class),
+                            ])
 
     model.summary()
 
@@ -167,20 +249,43 @@ def BuildModelwithSpecs(k,c,num_class = 2 , ds = None ,  input_shape = (1,60,6),
 
 #def ModelTraning(model,train_data, val_data, epochs=3):
 def ModelTraning(model,train_ds,val_ds = None , epochs = 3):
+
+    y_label = train_ds[1]
+
+    class_indices = np.argmax(y_label, axis=1)
+    classes = np.unique(class_indices)
+
+    class_weights = compute_class_weight(
+    class_weight='balanced',
+    classes=classes,
+    y=class_indices
+    )
+
+    class_weight_dict = dict(enumerate(class_weights))
+
+
+    print(class_weight_dict)
     
     hist = []
     file_path = "best_model.h5"
-    checkpoint = tf.keras.callbacks.ModelCheckpoint(file_path, monitor='val_accuracy', verbose=1, save_best_only=True, mode='max')
+    checkpoint = tf.keras.callbacks.ModelCheckpoint(file_path, monitor='val_f1_metric', verbose=1, save_best_only=True, mode='max')
     #early =  tf.keras.callbacks.EarlyStopping(monitor="val_accuracy", mode="max", patience=5, verbose=2)
-    redonplat =  tf.keras.callbacks.ReduceLROnPlateau(monitor="val_accuracy", mode="max", patience=3, verbose=2)
+    redonplat =  tf.keras.callbacks.ReduceLROnPlateau(monitor="val_f1_metric", mode="max", patience=3, verbose=2)
     callbacks_list = [checkpoint,  redonplat]  # early
+    #class_weight=class_weight_dict,
+
     if val_ds == None :
         
         #hist = model.fit(train_ds[0],train_ds[1] ,epochs=epochs,  verbose =True, validation_split=0.15,callbacks=callbacks_list) 
-        hist = model.fit(train_ds[0],train_ds[1] ,epochs=epochs,  verbose =True, validation_split=0.15) 
+        hist = model.fit(train_ds[0],train_ds[1] ,epochs=epochs,  verbose =True, validation_split=0.15 , ) 
     else :
-        hist = model.fit(train_ds[0],train_ds[1] ,epochs=epochs,  verbose =True, validation_data=(val_ds[0], val_ds[1]), callbacks=callbacks_list) 
-    max_val_acc = np.around(np.amax(hist.history['val_accuracy']), decimals=3)
+        hist = model.fit(train_ds[0],train_ds[1] ,epochs=epochs,  verbose =True, validation_data=(val_ds[0], val_ds[1]),     callbacks=[]) 
+    max_val_acc = np.around(np.amax(hist.history['val_macro_f1_score']), decimals=3)
+
+    del model 
+    clear_session()
+    gc.collect()
+
     return max_val_acc
 
 

@@ -4,7 +4,7 @@ from ModelBank import *
 
 
 class TinyTNAS :
-    def __init__(self,train_ds,val_ds,input_shape,num_class,learning_rate, constraints_specs= {"ram" : 20800, "flash" : 258400000  , "macc" : 2565454545 }):
+    def __init__(self,train_ds,val_ds,input_shape,num_class,learning_rate, constraints_specs= {"ram" : 20800, "flash" : 258400000  , "macc" : 2565454545 }, max_cnn_layer = 6):
         
         self.BuildModelwithSpecs = BuildModelwithSpecs
         self.ModelTraning = ModelTraning
@@ -34,6 +34,7 @@ class TinyTNAS :
         self.infeasible_configarations = []
         self.search_started_time = None
         self.search_time_minute = None
+        self.max_cnn_layer = max_cnn_layer
         
     def ExploreDepth(self,k,current_c,current_acc,constraints_specs,epochs,N=5, lossf=1):
         exploreable_cs = list(set(np.arange(N))-set([current_c]))
@@ -87,7 +88,7 @@ class TinyTNAS :
         
     def func_k(self,acc , epochs,lossf):
         
-        suggested_acc,suggested_c,suggested_specs,exploration_count = self.ExploreDepth(self.k,self.c,acc,self.constraints_specs,epochs=epochs,N=5 , lossf=lossf)
+        suggested_acc,suggested_c,suggested_specs,exploration_count = self.ExploreDepth(self.k,self.c,acc,self.constraints_specs,epochs=epochs,N=self.max_cnn_layer-1, lossf=lossf)
         self.explored_model_count= self.explored_model_count + exploration_count
         if suggested_acc > self.max_acc_found :
             self.c = suggested_c
